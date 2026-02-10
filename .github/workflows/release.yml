@@ -3,21 +3,19 @@ name: Release Artifacts
 on:
   push:
     tags:
-      - 'v*' # v1.0.0 のようなタグがプッシュされた時に起動
+      - 'v*'
 
 permissions:
   contents: write
 
 jobs:
   build:
-    name: Build and Release
+    name: Build binaries
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # ビルド対象のOSとアーキテクチャを指定
         goos: [linux, windows, darwin]
         goarch: [amd64, arm64]
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -26,9 +24,6 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.21'
-
-      - name: Install dependencies
-        run: go mod tidy
 
       - name: Build binary
         env:
@@ -41,9 +36,28 @@ jobs:
           fi
           go build -v -o "$BINARY_NAME" main.go
 
-      - name: Upload Release Artifacts
+      # ビルドしたファイルを一時保存
+      - name: Upload temporary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: agent-*
+
+  release:
+    name: Create Release
+    needs: build # buildジョブが全部終わるまで待つ
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./dist
+          pattern: binaries-*
+          merge-multiple: true
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: agent-*
+          files: ./dist/agent-*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
