@@ -49,8 +49,12 @@ func (ic *InfluxClient) SaveResults(results []monitor.Result) {
 			},
 			time.Now())
 
+		fmt.Printf("[DEBUG] [%s] InfluxDBへデータ送信中... (Bucket: %s)\n", res.Name, ic.bucket)
+
 		if err := ic.writeAPI.WritePoint(context.Background(), p); err != nil {
-			fmt.Printf("[DEBUG] [%s] DB Error: %v\n", res.Name, err)
+			fmt.Printf("[ERROR] [%s] InfluxDB書き込み失敗: %v\n", res.Name, err)
+		} else {
+			fmt.Printf("[DEBUG] [%s] InfluxDB書き込み成功\n", res.Name)
 		}
 	}
 }

@@ -57,35 +57,51 @@ func execute(c config.ServerConfig) Result {
 
 func fillSystemMetrics(res *Result) {
 	// CPU
-	c, _ := cpu.Percent(0, false)
-	if len(c) > 0 {
+	c, err := cpu.Percent(0, false)
+	if err == nil && len(c) > 0 {
 		res.CPUUsage = c[0]
+	} else {
+		fmt.Printf("[DEBUG] [%s] CPU使用率の取得に失敗しました: %v\n", res.Name, err)
 	}
 
 	// Memory
-	vm, _ := mem.VirtualMemory()
-	res.MemUsage = vm.UsedPercent
-	sm, _ := mem.SwapMemory()
-	res.SwapUsage = sm.UsedPercent
+	vm, err := mem.VirtualMemory()
+	if err == nil {
+		res.MemUsage = vm.UsedPercent
+	}
+	sm, err := mem.SwapMemory()
+	if err == nil {
+		res.SwapUsage = sm.UsedPercent
+	}
 
 	// Disk
-	d, _ := disk.Usage("/")
-	res.DiskUsage = d.UsedPercent
+	d, err := disk.Usage("/")
+	if err == nil {
+		res.DiskUsage = d.UsedPercent
+	} else {
+		fmt.Printf("[DEBUG] [%s] ディスク使用率の取得に失敗しました: %v\n", res.Name, err)
+	}
 
 	// Network
-	io, _ := net.IOCounters(false)
-	if len(io) > 0 {
+	io, err := net.IOCounters(false)
+	if err == nil && len(io) > 0 {
 		res.NetSent = io[0].BytesSent / 1024
 		res.NetRecv = io[0].BytesRecv / 1024
 	}
 
 	// Connections
-	conns, _ := net.Connections("tcp")
+	conns, err := net.Connections("tcp")
 	count := 0
-	for _, conn := range conns {
-		if conn.Status == "ESTABLISHED" {
-			count++
+	if err == nil {
+		for _, conn := range conns {
+			if conn.Status == "ESTABLISHED" {
+				count++
+			}
 		}
+		res.Connections = count
 	}
-	res.Connections = count
+
+	// 詳細な取得結果をログ出力
+	fmt.Printf("[DEBUG] [%s] リソース取得完了: CPU:%.1f%%, Mem:%.1f%%, Disk:%.1f%%, NetSent:%dKB, NetRecv:%dKB, Conns:%d\n",
+		res.Name, res.CPUUsage, res.MemUsage, res.DiskUsage, res.NetSent, res.NetRecv, res.Connections)
 }
