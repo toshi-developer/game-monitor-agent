@@ -1,26 +1,43 @@
 package monitor
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
 )
 
-func CheckFiveM(name, addr string, timeout time.Duration, start time.Time) Result {
-	url := fmt.Sprintf("http://%s/info.json", addr)
+type FiveMDynamic struct {
+	Clients    int `json:"clients"`
+	MaxClients int `json:"sv_maxclients"`
+}
+
+func fetchFiveMDetails(res Result, addr string, timeout time.Duration, start time.Time) Result {
 	client := http.Client{Timeout: timeout}
 
-	resp, err := client.Get(url)
+	// 1. プレイヤー人数の取得
+	resp, err := client.Get(fmt.Sprintf("http://%s/dynamic.json", addr))
+	if err == nil {
+		defer resp.Body.Close()
+		var dyn FiveMDynamic
+		if err := json.NewDecoder(resp.Body).Decode(&dyn); err == nil {
+			res.PlayerCount = dyn.Clients
+			res.MaxPlayers = dyn.MaxClients
+		}
+	}
+
+	// 2. 死活確認とレイテンシ
+	respInfo, err := client.Get(fmt.Sprintf("http://%s/info.json", addr))
 	if err != nil {
-		fmt.Printf("[DEBUG] [%s] FiveM API応答なし: %v\n", name, err)
-		return Result{Name: name, IsAlive: false, Message: "API Unreachable"}
+		res.IsAlive = false
+		res.Message = "API Unreachable"
+		return res
 	}
-	defer resp.Body.Close()
+	defer respInfo.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return Result{Name: name, IsAlive: false, Message: fmt.Sprintf("HTTP %d", resp.StatusCode)}
-	}
+	res.IsAlive = (respInfo.StatusCode == http.StatusOK)
+	res.Latency = time.Since(start)
+	res.Message = "FiveM Metrics Collected"
 
-	fmt.Printf("[DEBUG] [%s] FiveM API応答 OK\n", name)
-	return Result{Name: name, IsAlive: true, Latency: time.Since(start), Message: "FiveM Fully Functional"}
+	return res
 }
