@@ -1,0 +1,28 @@
+# toshi dev: Game Monitor Agent - Example Configuration
+
+monitoring:
+  # 監視を実行する間隔（秒）
+  interval_seconds: 15
+  
+  # 監視対象サーバーのリスト
+  game_servers:
+    - name: "FiveM-Main-Server"
+      game_type: "fivem"     # fivem または generic
+      address: "127.0.0.1"
+      port: 30120
+      timeout_ms: 3000
+    - name: "Lobby-TCP-Check"
+      game_type: "generic"
+      address: "127.0.0.1"
+      port: 8080
+      timeout_ms: 2000
+
+destination:
+  # "local" (InfluxDB) または "saas" (将来用)
+  mode: "local"
+  local:
+    # Docker Compose で起動した InfluxDB のデフォルト設定例
+    url: "http://localhost:8086"
+    token: "my-super-secret-auth-token"
+    org: "toshi-dev"
+    bucket: "game_metrics"

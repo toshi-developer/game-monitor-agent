@@ -1,0 +1,28 @@
+# --- Binaries ---
+/game-monitor-agent
+/agent
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# --- Configuration ---
+# 本物のトークンやパスワードが含まれるため、実ファイルは除外
+config.yaml
+
+# --- Go Specific ---
+# 依存関係のバイナリキャッシュ
+vendor/
+# テスト結果やカバレッジ
+*.test
+*.out
+
+# --- Environment / IDE ---
+.env
+.vscode/
+.idea/
+.DS_Store
+
+# --- Logs ---
+*.log
