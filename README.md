@@ -1,14 +1,45 @@
-## デプロイと常駐化 (Deployment & Persistence)
+# Game Monitor Agent (by toshi dev)
 
-本エージェントをサーバ上で24時間365日安定して動作させるための推奨設定です。
+Go言語で開発された、軽量で強力なゲームサーバ監視エージェントです。
+特に **FiveM** サーバの死活監視に最適化されており、詳細なメトリクスを時系列DB（InfluxDB）に蓄積します。
+
+
+
+## 主な機能
+- **並列監視**: 複数のゲームサーバを Goroutine で同時にチェック。
+- **FiveM 特化型ロジック**: ポート疎通(L4)だけでなく、`/info.json` へのHTTP応答(L7)まで確認。
+- **時系列DB連携**: InfluxDB 2.x への自動データ送信。
+- **デバッグフレンドリー**: `[DEBUG]` プレフィックス付きの詳細なログ出力。
+- **常駐化対応**: Docker および systemd による 24/365 の動作をサポート。
+
+## クイックスタート
+
+### 1. インフラの起動
+Dockerを使用して InfluxDB と Grafana を起動します。
+```bash
+docker-compose up -d
+```
+
+### 2. 設定
+`config.yaml.example` を `config.yaml` にコピーし、環境に合わせて編集してください。
+```bash
+cp config.yaml.example config.yaml
+```
+
+### 3. エージェントの実行
+```bash
+go mod tidy
+go run main.go
+```
+
+## デプロイと常駐化 (Deployment & Persistence)
 
 ### 1. Docker Compose による常駐化 (推奨)
 `docker-compose.yml` 内の `restart: always` 設定により、OS起動時やエラー終了時にエージェントが自動で再起動します。
 
-**実行方法:**
+**起動方法:**
 ```bash
-# バックグラウンドで起動
-docker-compose up -d
+docker-compose up -d --build
 ```
 
 **ログの確認方法:**
@@ -25,11 +56,11 @@ Dockerを使用せず、Linuxのシステムサービスとして直接実行す
    ```bash
    go build -o agent main.go
    ```
-2. `/etc/systemd/system/game-monitor.service` を以下の内容で作成します:
+2. `/etc/systemd/system/game-monitor.service` を作成します（パスやユーザ名は環境に合わせて変更してください）:
    ```ini
    [Unit]
    Description=Game Monitor Agent (toshi dev)
-   After=network.target
+   After=network.target influxdb.service
 
    [Service]
    Type=simple
@@ -49,10 +80,22 @@ Dockerを使用せず、Linuxのシステムサービスとして直接実行す
    sudo systemctl start game-monitor.service
    ```
 
----
+## 設定項目 (config.yaml)
+| 項目 | 説明 |
+| :--- | :--- |
+| `game_type` | `fivem` または `generic` を指定可能。 |
+| `interval_seconds` | 監視を実行する間隔（秒）。 |
+| `timeout_ms` | 応答待ちのタイムアウト（ミリ秒）。 |
 
-## メンテナンスとデバッグ
+## 開発環境
+- **Language**: Go 1.21+
+- **Database**: InfluxDB 2.x
+- **Visualization**: Grafana
 
-すべてのパッケージ（`config`, `monitor`, `storage`）において詳細なデバッグメッセージを出力するように設計されています。
+## ライセンス
+MIT License
 
-`[DEBUG]` プレフィックスがついたログを確認することで、設定の読み込み状況、FiveM APIへの疎通、InfluxDBへの書き込み成功可否をリアルタイムで追跡可能です。
+## 開発者
+- ユーザ名: **toshi-developer**
+- 屋号: **toshi dev**
+- Web: [GitHub Profile](https://github.com/toshi-developer)
