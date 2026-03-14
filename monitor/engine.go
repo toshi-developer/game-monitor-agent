@@ -12,7 +12,22 @@ import (
 	"github.com/toshi-developer/game-monitor-agent/config"
 )
 
+// providers はゲーム種別名から Provider へのレジストリです。
+// init() 関数で各プロバイダが自身を登録します。
+var providers = map[string]Provider{}
+
+// RegisterProvider はプロバイダをレジストリに登録します。
+func RegisterProvider(gameType string, p Provider) {
+	providers[gameType] = p
+}
+
+// RunAll は全サーバーの監視を並列実行し、結果を返します。
+// ホストのシステムメトリクスは1サイクルにつき1回だけ取得します。
 func RunAll(servers []config.ServerConfig) []Result {
+	// 1. システムメトリクスを1回だけ取得
+	sysMetrics := collectSystemMetrics()
+
+	// 2. 各サーバーのゲーム固有監視を並列実行
 	var wg sync.WaitGroup
 	results := make(chan Result, len(servers))
 
@@ -20,7 +35,7 @@ func RunAll(servers []config.ServerConfig) []Result {
 		wg.Add(1)
 		go func(c config.ServerConfig) {
 			defer wg.Done()
-			results <- execute(c)
+			results <- execute(c, sysMetrics)
 		}(s)
 	}
 
@@ -34,74 +49,87 @@ func RunAll(servers []config.ServerConfig) []Result {
 	return output
 }
 
-func execute(c config.ServerConfig) Result {
-	start := time.Now()
+// execute は単一サーバーの監視を実行します。
+func execute(c config.ServerConfig, sysMetrics SystemMetrics) Result {
 	timeout := time.Duration(c.TimeoutMS) * time.Millisecond
 	addr := fmt.Sprintf("%s:%d", c.Address, c.Port)
 
-	// 基盤となるリソース情報を取得
-	res := Result{Name: c.Name}
-	fillSystemMetrics(&res)
+	res := Result{
+		Name:          c.Name,
+		SystemMetrics: sysMetrics,
+	}
 
-	// ゲーム種別ごとの詳細取得
-	switch c.GameType {
-	case "fivem":
-		return fetchFiveMDetails(res, addr, timeout, start)
-	default:
-		// 未知のゲームはTCP疎通確認のみ（仮）
-		res.IsAlive = true // 実際にはここで簡単な疎通確認を入れる
-		res.Message = "Generic Check"
+	p, ok := providers[c.GameType]
+	if !ok {
+		// 未登録のゲーム種別
+		fmt.Printf("[WARN] [%s] 未知のゲーム種別: %q (スキップ)\n", c.Name, c.GameType)
+		res.GameResult = GameResult{
+			IsAlive: false,
+			Message: fmt.Sprintf("Unknown game_type: %q", c.GameType),
+		}
 		return res
 	}
+
+	// 7DtD はWeb APIアクセスのために ServerConfig を渡す
+	if sp, ok := p.(*SevenDTDProvider); ok {
+		res.GameResult = sp.FetchWithWebAPI(addr, timeout, &c)
+	} else {
+		res.GameResult = p.Fetch(addr, timeout)
+	}
+	return res
 }
 
-func fillSystemMetrics(res *Result) {
+// collectSystemMetrics はホストのシステムリソース情報を1回取得します。
+func collectSystemMetrics() SystemMetrics {
+	var m SystemMetrics
+
 	// CPU
 	c, err := cpu.Percent(0, false)
 	if err == nil && len(c) > 0 {
-		res.CPUUsage = c[0]
+		m.CPUUsage = c[0]
 	} else {
-		fmt.Printf("[DEBUG] [%s] CPU使用率の取得に失敗しました: %v\n", res.Name, err)
+		fmt.Printf("[DEBUG] CPU使用率の取得に失敗しました: %v\n", err)
 	}
 
 	// Memory
 	vm, err := mem.VirtualMemory()
 	if err == nil {
-		res.MemUsage = vm.UsedPercent
+		m.MemUsage = vm.UsedPercent
 	}
 	sm, err := mem.SwapMemory()
 	if err == nil {
-		res.SwapUsage = sm.UsedPercent
+		m.SwapUsage = sm.UsedPercent
 	}
 
 	// Disk
 	d, err := disk.Usage("/")
 	if err == nil {
-		res.DiskUsage = d.UsedPercent
+		m.DiskUsage = d.UsedPercent
 	} else {
-		fmt.Printf("[DEBUG] [%s] ディスク使用率の取得に失敗しました: %v\n", res.Name, err)
+		fmt.Printf("[DEBUG] ディスク使用率の取得に失敗しました: %v\n", err)
 	}
 
 	// Network
 	io, err := net.IOCounters(false)
 	if err == nil && len(io) > 0 {
-		res.NetSent = io[0].BytesSent / 1024
-		res.NetRecv = io[0].BytesRecv / 1024
+		m.NetSent = io[0].BytesSent / 1024
+		m.NetRecv = io[0].BytesRecv / 1024
 	}
 
 	// Connections
 	conns, err := net.Connections("tcp")
-	count := 0
 	if err == nil {
+		count := 0
 		for _, conn := range conns {
 			if conn.Status == "ESTABLISHED" {
 				count++
 			}
 		}
-		res.Connections = count
+		m.Connections = count
 	}
 
-	// 詳細な取得結果をログ出力
-	fmt.Printf("[DEBUG] [%s] リソース取得完了: CPU:%.1f%%, Mem:%.1f%%, Disk:%.1f%%, NetSent:%dKB, NetRecv:%dKB, Conns:%d\n",
-		res.Name, res.CPUUsage, res.MemUsage, res.DiskUsage, res.NetSent, res.NetRecv, res.Connections)
+	fmt.Printf("[DEBUG] リソース取得完了: CPU:%.1f%%, Mem:%.1f%%, Disk:%.1f%%, NetSent:%dKB, NetRecv:%dKB, Conns:%d\n",
+		m.CPUUsage, m.MemUsage, m.DiskUsage, m.NetSent, m.NetRecv, m.Connections)
+
+	return m
 }

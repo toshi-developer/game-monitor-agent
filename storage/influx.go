@@ -32,21 +32,34 @@ func (ic *InfluxClient) SaveResults(results []monitor.Result) {
 			status = 1
 		}
 
+		fields := map[string]interface{}{
+			"is_alive":    status,
+			"latency_ms":  res.Latency.Milliseconds(),
+			"cpu_usage":   res.CPUUsage,
+			"mem_usage":   res.MemUsage,
+			"swap_usage":  res.SwapUsage,
+			"disk_usage":  res.DiskUsage,
+			"net_sent_kb": res.NetSent,
+			"net_recv_kb": res.NetRecv,
+			"connections": res.Connections,
+			"players":     res.PlayerCount,
+			"max_players": res.MaxPlayers,
+		}
+
+		// ゲーム固有フィールド（値がある場合のみ書き込み）
+		if res.MapName != "" {
+			fields["map_name"] = res.MapName
+		}
+		if res.Version != "" {
+			fields["version"] = res.Version
+		}
+		if res.GameTime != "" {
+			fields["game_time"] = res.GameTime
+		}
+
 		p := influxdb2.NewPoint("server_metrics",
 			map[string]string{"server_name": res.Name},
-			map[string]interface{}{
-				"is_alive":    status,
-				"latency_ms":  res.Latency.Milliseconds(),
-				"cpu_usage":   res.CPUUsage,
-				"mem_usage":   res.MemUsage,
-				"swap_usage":  res.SwapUsage,
-				"disk_usage":  res.DiskUsage,
-				"net_sent_kb": res.NetSent,
-				"net_recv_kb": res.NetRecv,
-				"connections": res.Connections,
-				"players":     res.PlayerCount,
-				"max_players": res.MaxPlayers,
-			},
+			fields,
 			time.Now())
 
 		fmt.Printf("[DEBUG] [%s] InfluxDBへデータ送信中... (Bucket: %s)\n", res.Name, ic.bucket)

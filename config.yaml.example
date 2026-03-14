@@ -3,19 +3,30 @@
 monitoring:
   # 監視を実行する間隔（秒）
   interval_seconds: 15
-  
+
   # 監視対象サーバーのリスト
   game_servers:
+    # FiveM サーバー (HTTP API で監視)
     - name: "FiveM-Main-Server"
-      game_type: "fivem"     # fivem または generic
+      game_type: "fivem"
       address: "127.0.0.1"
       port: 30120
       timeout_ms: 3000
-    - name: "Lobby-TCP-Check"
-      game_type: "generic"
+
+    # ARK: Survival Ascended (A2S プロトコルで監視)
+    - name: "ARK-Server"
+      game_type: "ark"
       address: "127.0.0.1"
-      port: 8080
-      timeout_ms: 2000
+      port: 27015
+      timeout_ms: 5000
+
+    # 7 Days to Die (A2S + Web API で監視)
+    - name: "7DtD-Server"
+      game_type: "7dtd"
+      address: "127.0.0.1"
+      port: 26900          # ゲームポート (A2S クエリ用)
+      timeout_ms: 5000
+      web_api_port: 8080   # Web API ポート (/api/getstats でゲーム内時間取得)
 
 destination:
   # "local" (InfluxDB) または "saas" (将来用)

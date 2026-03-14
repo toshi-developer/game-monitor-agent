@@ -1,8 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/toshi-developer/game-monitor-agent/config"
@@ -19,6 +23,10 @@ func main() {
 		log.Fatalf("[FATAL] 設定読み込み失敗: %v", err)
 	}
 
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("[FATAL] 設定バリデーション失敗: %v", err)
+	}
+
 	// 2. ストレージ初期化
 	var db *storage.InfluxClient
 	if cfg.Destination.Mode == "local" {
@@ -26,9 +34,15 @@ func main() {
 		defer db.Close()
 	}
 
-	// 3. メインループ
+	// 3. グレースフルシャットダウン用のコンテキスト
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// 4. メインループ
 	ticker := time.NewTicker(time.Duration(cfg.Monitoring.Interval) * time.Second)
 	defer ticker.Stop()
+
+	fmt.Printf("[INFO] 監視開始: %d サーバー, %d秒間隔\n", len(cfg.Monitoring.Servers), cfg.Monitoring.Interval)
 
 	for {
 		fmt.Printf("\n[DEBUG] サイクル開始: %s\n", time.Now().Format("15:04:05"))
@@ -40,9 +54,14 @@ func main() {
 		}
 
 		for _, r := range results {
-			fmt.Printf("[RESULT] %-15s | Alive: %-5v | Msg: %s\n", r.Name, r.IsAlive, r.Message)
+			fmt.Printf("[RESULT] %-20s | Alive: %-5v | %s\n", r.Name, r.IsAlive, r.Message)
 		}
 
-		<-ticker.C
+		select {
+		case <-ctx.Done():
+			fmt.Println("\n[INFO] シャットダウンシグナルを受信しました。終了します。")
+			return
+		case <-ticker.C:
+		}
 	}
 }
