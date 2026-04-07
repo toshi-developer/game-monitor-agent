@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -62,7 +63,7 @@ func execute(c config.ServerConfig, sysMetrics SystemMetrics) Result {
 	p, ok := providers[c.GameType]
 	if !ok {
 		// 未登録のゲーム種別
-		fmt.Printf("[WARN] [%s] 未知のゲーム種別: %q (スキップ)\n", c.Name, c.GameType)
+		slog.Warn("未知のゲーム種別", "server", c.Name, "game_type", c.GameType)
 		res.GameResult = GameResult{
 			IsAlive: false,
 			Message: fmt.Sprintf("Unknown game_type: %q", c.GameType),
@@ -85,40 +86,49 @@ func collectSystemMetrics() SystemMetrics {
 
 	// CPU
 	c, err := cpu.Percent(0, false)
-	if err == nil && len(c) > 0 {
+	if err != nil {
+		slog.Warn("CPU 使用率の取得に失敗", "error", err)
+	} else if len(c) > 0 {
 		m.CPUUsage = c[0]
-	} else {
-		fmt.Printf("[DEBUG] CPU使用率の取得に失敗しました: %v\n", err)
 	}
 
 	// Memory
 	vm, err := mem.VirtualMemory()
-	if err == nil {
+	if err != nil {
+		slog.Warn("メモリ使用率の取得に失敗", "error", err)
+	} else {
 		m.MemUsage = vm.UsedPercent
 	}
+
 	sm, err := mem.SwapMemory()
-	if err == nil {
+	if err != nil {
+		slog.Warn("スワップ使用率の取得に失敗", "error", err)
+	} else {
 		m.SwapUsage = sm.UsedPercent
 	}
 
 	// Disk
 	d, err := disk.Usage("/")
-	if err == nil {
-		m.DiskUsage = d.UsedPercent
+	if err != nil {
+		slog.Warn("ディスク使用率の取得に失敗", "error", err)
 	} else {
-		fmt.Printf("[DEBUG] ディスク使用率の取得に失敗しました: %v\n", err)
+		m.DiskUsage = d.UsedPercent
 	}
 
 	// Network
 	io, err := net.IOCounters(false)
-	if err == nil && len(io) > 0 {
+	if err != nil {
+		slog.Warn("ネットワーク I/O の取得に失敗", "error", err)
+	} else if len(io) > 0 {
 		m.NetSent = io[0].BytesSent / 1024
 		m.NetRecv = io[0].BytesRecv / 1024
 	}
 
 	// Connections
 	conns, err := net.Connections("tcp")
-	if err == nil {
+	if err != nil {
+		slog.Warn("TCP 接続数の取得に失敗", "error", err)
+	} else {
 		count := 0
 		for _, conn := range conns {
 			if conn.Status == "ESTABLISHED" {
@@ -128,8 +138,14 @@ func collectSystemMetrics() SystemMetrics {
 		m.Connections = count
 	}
 
-	fmt.Printf("[DEBUG] リソース取得完了: CPU:%.1f%%, Mem:%.1f%%, Disk:%.1f%%, NetSent:%dKB, NetRecv:%dKB, Conns:%d\n",
-		m.CPUUsage, m.MemUsage, m.DiskUsage, m.NetSent, m.NetRecv, m.Connections)
+	slog.Debug("システムメトリクス取得完了",
+		"cpu", m.CPUUsage,
+		"mem", m.MemUsage,
+		"disk", m.DiskUsage,
+		"net_sent_kb", m.NetSent,
+		"net_recv_kb", m.NetRecv,
+		"connections", m.Connections,
+	)
 
 	return m
 }

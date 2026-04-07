@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/rumblefrog/go-a2s"
@@ -16,6 +17,7 @@ func init() {
 }
 
 func (p *A2SProvider) Fetch(addr string, timeout time.Duration) GameResult {
+	log := slog.With("provider", "a2s", "addr", addr)
 	var res GameResult
 
 	start := time.Now()
@@ -31,7 +33,7 @@ func (p *A2SProvider) Fetch(addr string, timeout time.Duration) GameResult {
 	if err != nil {
 		res.IsAlive = false
 		res.Message = fmt.Sprintf("A2S Query Failed: %v", err)
-		fmt.Printf("[DEBUG] [A2S] %s への A2S_INFO クエリ失敗: %v\n", addr, err)
+		log.Warn("A2S_INFO クエリ失敗", "error", err)
 		return res
 	}
 
@@ -43,8 +45,13 @@ func (p *A2SProvider) Fetch(addr string, timeout time.Duration) GameResult {
 	res.Version = info.Version
 	res.Message = fmt.Sprintf("A2S Active: %s", info.Name)
 
-	fmt.Printf("[DEBUG] [A2S] %s 監視完了: Players=%d/%d, Map=%s, Version=%s, Latency=%v\n",
-		addr, res.PlayerCount, res.MaxPlayers, res.MapName, res.Version, res.Latency)
+	log.Debug("監視完了",
+		"players", res.PlayerCount,
+		"max_players", res.MaxPlayers,
+		"map", res.MapName,
+		"version", res.Version,
+		"latency", res.Latency,
+	)
 
 	return res
 }

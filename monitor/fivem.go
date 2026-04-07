@@ -3,6 +3,7 @@ package monitor
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -22,12 +23,13 @@ type FiveMDynamic struct {
 }
 
 func (p *FiveMProvider) Fetch(addr string, timeout time.Duration) GameResult {
+	log := slog.With("provider", "fivem")
 	client := http.Client{Timeout: timeout}
 	var res GameResult
 
 	// 1. プレイヤー人数と最大人数の取得 (dynamic.json)
 	if err := p.fetchDynamic(&client, addr, &res); err != nil {
-		fmt.Printf("[DEBUG] [FiveM] dynamic.json の取得に失敗: %v\n", err)
+		log.Warn("dynamic.json の取得に失敗", "error", err)
 	}
 
 	// 2. 死活確認とレイテンシの取得 (info.json)
@@ -45,8 +47,12 @@ func (p *FiveMProvider) Fetch(addr string, timeout time.Duration) GameResult {
 	res.Latency = time.Since(start)
 	res.Message = fmt.Sprintf("FiveM Active (Status: %d)", resp.StatusCode)
 
-	fmt.Printf("[DEBUG] [FiveM] 監視完了: Alive=%v, Players=%d/%d, Latency=%v\n",
-		res.IsAlive, res.PlayerCount, res.MaxPlayers, res.Latency)
+	log.Debug("監視完了",
+		"alive", res.IsAlive,
+		"players", res.PlayerCount,
+		"max_players", res.MaxPlayers,
+		"latency", res.Latency,
+	)
 
 	return res
 }
@@ -66,6 +72,9 @@ func (p *FiveMProvider) fetchDynamic(client *http.Client, addr string, res *Game
 
 	res.PlayerCount = dyn.Clients
 	res.MaxPlayers = dyn.MaxClients
-	fmt.Printf("[DEBUG] [FiveM] プレイヤー数取得成功: %d/%d\n", res.PlayerCount, res.MaxPlayers)
+	slog.Debug("FiveM プレイヤー数取得成功",
+		"players", res.PlayerCount,
+		"max", res.MaxPlayers,
+	)
 	return nil
 }

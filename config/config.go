@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -58,7 +59,7 @@ func (c *Config) Validate() error {
 }
 
 func LoadConfig(path string) (*Config, error) {
-	fmt.Printf("[DEBUG] 設定ファイルを読み込みます: %s\n", path)
+	slog.Debug("設定ファイルを読み込みます", "path", path)
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err

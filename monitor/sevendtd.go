@@ -3,6 +3,7 @@ package monitor
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -33,6 +34,7 @@ func (p *SevenDTDProvider) Fetch(addr string, timeout time.Duration) GameResult 
 
 // FetchWithWebAPI は ServerConfig を受け取り、Web API ポートを使ってゲーム内時間も取得します。
 func (p *SevenDTDProvider) FetchWithWebAPI(addr string, timeout time.Duration, serverCfg *config.ServerConfig) GameResult {
+	log := slog.With("provider", "7dtd", "addr", addr)
 	var res GameResult
 
 	// 1. A2S クエリによる基本情報取得
@@ -49,7 +51,7 @@ func (p *SevenDTDProvider) FetchWithWebAPI(addr string, timeout time.Duration, s
 	if err != nil {
 		res.IsAlive = false
 		res.Message = fmt.Sprintf("A2S Query Failed: %v", err)
-		fmt.Printf("[DEBUG] [7DtD] %s への A2S_INFO クエリ失敗: %v\n", addr, err)
+		log.Warn("A2S_INFO クエリ失敗", "error", err)
 		return res
 	}
 
@@ -65,14 +67,19 @@ func (p *SevenDTDProvider) FetchWithWebAPI(addr string, timeout time.Duration, s
 	if serverCfg != nil && serverCfg.WebAPIPort > 0 {
 		gameTime, err := fetchGameTime(serverCfg.Address, serverCfg.WebAPIPort, timeout)
 		if err != nil {
-			fmt.Printf("[DEBUG] [7DtD] ゲーム内時間の取得に失敗: %v\n", err)
+			log.Warn("ゲーム内時間の取得に失敗", "error", err)
 		} else {
 			res.GameTime = gameTime
 		}
 	}
 
-	fmt.Printf("[DEBUG] [7DtD] %s 監視完了: Players=%d/%d, Map=%s, GameTime=%s, Latency=%v\n",
-		addr, res.PlayerCount, res.MaxPlayers, res.MapName, res.GameTime, res.Latency)
+	log.Debug("監視完了",
+		"players", res.PlayerCount,
+		"max_players", res.MaxPlayers,
+		"map", res.MapName,
+		"game_time", res.GameTime,
+		"latency", res.Latency,
+	)
 
 	return res
 }

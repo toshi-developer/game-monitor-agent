@@ -2,8 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,16 +14,18 @@ import (
 )
 
 func main() {
-	fmt.Println("=== Toshi Dev: Game Monitor Agent Starting ===")
+	slog.Info("Game Monitor Agent starting")
 
 	// 1. 設定ロード
 	cfg, err := config.LoadConfig("config.yaml")
 	if err != nil {
-		log.Fatalf("[FATAL] 設定読み込み失敗: %v", err)
+		slog.Error("設定読み込み失敗", "error", err)
+		os.Exit(1)
 	}
 
 	if err := cfg.Validate(); err != nil {
-		log.Fatalf("[FATAL] 設定バリデーション失敗: %v", err)
+		slog.Error("設定バリデーション失敗", "error", err)
+		os.Exit(1)
 	}
 
 	// 2. ストレージ初期化
@@ -42,10 +43,13 @@ func main() {
 	ticker := time.NewTicker(time.Duration(cfg.Monitoring.Interval) * time.Second)
 	defer ticker.Stop()
 
-	fmt.Printf("[INFO] 監視開始: %d サーバー, %d秒間隔\n", len(cfg.Monitoring.Servers), cfg.Monitoring.Interval)
+	slog.Info("監視開始",
+		"servers", len(cfg.Monitoring.Servers),
+		"interval_sec", cfg.Monitoring.Interval,
+	)
 
 	for {
-		fmt.Printf("\n[DEBUG] サイクル開始: %s\n", time.Now().Format("15:04:05"))
+		slog.Debug("サイクル開始")
 
 		results := monitor.RunAll(cfg.Monitoring.Servers)
 
@@ -54,12 +58,16 @@ func main() {
 		}
 
 		for _, r := range results {
-			fmt.Printf("[RESULT] %-20s | Alive: %-5v | %s\n", r.Name, r.IsAlive, r.Message)
+			slog.Info("監視結果",
+				"server", r.Name,
+				"alive", r.IsAlive,
+				"message", r.Message,
+			)
 		}
 
 		select {
 		case <-ctx.Done():
-			fmt.Println("\n[INFO] シャットダウンシグナルを受信しました。終了します。")
+			slog.Info("シャットダウンシグナルを受信しました。終了します。")
 			return
 		case <-ticker.C:
 		}

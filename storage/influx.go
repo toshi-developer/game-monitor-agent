@@ -2,7 +2,7 @@ package storage
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"time"
 
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
@@ -31,6 +31,8 @@ func (ic *InfluxClient) SaveResults(results []monitor.Result) {
 		if res.IsAlive {
 			status = 1
 		}
+
+		log := slog.With("server", res.Name)
 
 		fields := map[string]interface{}{
 			"is_alive":    status,
@@ -62,12 +64,12 @@ func (ic *InfluxClient) SaveResults(results []monitor.Result) {
 			fields,
 			time.Now())
 
-		fmt.Printf("[DEBUG] [%s] InfluxDBへデータ送信中... (Bucket: %s)\n", res.Name, ic.bucket)
+		log.Debug("InfluxDB へデータ送信中", "bucket", ic.bucket)
 
 		if err := ic.writeAPI.WritePoint(context.Background(), p); err != nil {
-			fmt.Printf("[ERROR] [%s] InfluxDB書き込み失敗: %v\n", res.Name, err)
+			log.Error("InfluxDB 書き込み失敗", "error", err)
 		} else {
-			fmt.Printf("[DEBUG] [%s] InfluxDB書き込み成功\n", res.Name)
+			log.Debug("InfluxDB 書き込み成功")
 		}
 	}
 }
